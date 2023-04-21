@@ -1,0 +1,70 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <string.h>
+#include <sys/wait.h>
+#define Num_child 5                             //Array child process
+
+int child_pipe[Num_child];                      //Array pipe to communicate each child process
+
+void interrupt_handler(int sig){
+        printf("\nProcess was intterupt, Exiting...\n");
+                for(int i = 0;i < Num_child;i++){
+                if(child_pipe[i] > 0){
+                     kill(child_pipe[i],SIGTERM);       //Terminate child process
+                }
+        }
+        exit(0);
+}
+
+int main(){
+
+        int Pipe_fds[2];                                // Pipe file descriptors
+        int child_counter = 0;                          //Child process counter
+        char buffer[256];                               //Massage Buffer display
+
+        if(pipe(Pipe_fds)< 0){
+        perror("Pipe file creation was intterupt,Exiting"); exit(1);
+        }
+
+        signal(SIGINT,interrupt_handler);               //Register signal handler incase intterupt process
+
+        while(1){
+                printf("Enter a message or 'E' to exit the system: ");
+                fgets(buffer ,sizeof(buffer),stdin);
+
+                if(strcmp(buffer, "E\n") == 0){
+                        break;                          //Process will be exit if 'E' is entered
+                }
+                int pid = fork();                               //Fork child process
+
+                if(pid<0){
+                        perror("Fork process failed");
+                        exit(1);
+                }
+
+                else if (pid == 0){                                                            //Child processs
+                        close(Pipe_fds[1]);                                                    // Close write end of the pipe
+                        char received_buffer[256];                                             // Buffer to receive message from parent
+                        read(Pipe_fds[0], received_buffer, sizeof(received_buffer));           // Read from pipe
+                printf("Child process %d received message: %s", getpid(), received_buffer);
+                close(Pipe_fds[0]);                                                            // Close read end of the pipe
+                exit(0);
+                }
+
+                else{
+                                                                         //Parent process
+                close(Pipe_fds[0]);                                     //Close read end of the pipe
+                write(Pipe_fds[1],buffer,strlen(buffer) +1);            //write to pipe
+                child_pipe[child_counter++] = pid;                      //Child process store
+
+                if(child_counter == Num_child){
+                        printf("\nSorry,the maximum capacity of child process has been reach.Exiting...\n");
+                        break;                                          //Exit the loop
+                }
+                }
+                }
+        interrupt_handler(SIGINT);                                      //Terminate child process and exit
+        return (0);
+}
